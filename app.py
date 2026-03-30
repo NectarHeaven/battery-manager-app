@@ -32,18 +32,28 @@ conn = st.connection("gsheets", type=GSheetsConnection)
 # Read data (ttl=0 ensures it always fetches the live data)
 df = conn.read(worksheet="Sheet1", ttl=0)
 
-# Clean the data for processing
+# Clean the data and explicitly read dates as mm/dd/yyyy
 df.fillna("", inplace=True)
 df['Status'] = df['Status'].apply(lambda x: str(x).title() if str(x).strip() != "" else "")
-df['Date of Purchase'] = pd.to_datetime(df['Date of Purchase'], errors='coerce', dayfirst=True).dt.date
-df['Date of Sale'] = pd.to_datetime(df['Date of Sale'], errors='coerce', dayfirst=True).dt.date
+
+# Parse dates matching your Google Sheet format (mm/dd/yyyy)
+df['Date of Purchase'] = pd.to_datetime(df['Date of Purchase'], format='%m/%d/%Y', errors='coerce').dt.date
+df['Date of Sale'] = pd.to_datetime(df['Date of Sale'], format='%m/%d/%Y', errors='coerce').dt.date
+df['Expiry Date'] = pd.to_datetime(df['Expiry Date'], format='%m/%d/%Y', errors='coerce').dt.date
 
 # Helper Function to save data back to Google Sheets safely
 def save_data(updated_df):
-    # Convert everything to strings to prevent JSON/Google Sheets upload errors
     df_to_save = updated_df.copy()
+    
+    # Format all date columns back to mm/dd/yyyy before saving to Google Sheets
+    date_columns = ['Date of Purchase', 'Date of Sale', 'Expiry Date']
+    for col in date_columns:
+        df_to_save[col] = pd.to_datetime(df_to_save[col], errors='coerce').dt.strftime('%m/%d/%Y')
+        
+    # Convert everything else to strings to prevent JSON/Google Sheets upload errors
     for col in df_to_save.columns:
         df_to_save[col] = df_to_save[col].astype(str).replace("NaT", "").replace("nan", "")
+        
     conn.update(worksheet="Sheet1", data=df_to_save)
     st.cache_data.clear()
 
@@ -93,7 +103,7 @@ elif page == "Add New Stock":
     with st.form("add_stock_form"):
         col1, col2 = st.columns(2)
         with col1:
-            purchase_date = st.date_input("Date of Purchase (YYYY-MM-DD)")
+            purchase_date = st.date_input("Date of Purchase")
             brand = st.text_input("Brand & Model").upper()
             serial_no = st.text_input("Serial Number").upper()
         with col2:
@@ -131,7 +141,7 @@ elif page == "Sell Battery":
     else:
         with st.form("sell_battery_form"):
             selected_serial = st.selectbox("Select Battery", in_stock_df['Serial Number'], index=None, placeholder="Select Serial...")
-            sale_date = st.date_input("Date of Sale (YYYY-MM-DD)")
+            sale_date = st.date_input("Date of Sale")
             vehicle_no = st.text_input("Vehicle Number").upper()
             sell_price = st.number_input("Selling Price (₹)", min_value=0.0, value=None, format="%.2f", step=10.0, placeholder="Enter price...")
             
@@ -175,7 +185,7 @@ elif page == "Replace Faulty Battery":
         with st.form("replace_form"):
             old_serial = st.selectbox("Faulty Battery", installed_df['Serial Number'], index=None, placeholder="Select Old...")
             new_serial = st.selectbox("Replacement Battery", in_stock_df['Serial Number'], index=None, placeholder="Select New...")
-            replace_date = st.date_input("Date of Replacement (YYYY-MM-DD)")
+            replace_date = st.date_input("Date of Replacement")
             
             sell_price = st.number_input("Selling Price (₹) [Leave empty if Free]", min_value=0.0, value=None, format="%.2f", step=10.0)
             col1, col2 = st.columns(2)
