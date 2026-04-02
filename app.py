@@ -32,6 +32,9 @@ conn = st.connection("gsheets", type=GSheetsConnection)
 # Read data (ttl=0 ensures it always fetches the live data)
 df = conn.read(worksheet="Sheet1", ttl=0)
 
+# 🛠️ THE FIX: Convert entire dataframe to flexible objects so Pandas allows empty strings
+df = df.astype(object)
+
 # Clean the data and explicitly read dates as mm/dd/yyyy
 df.fillna("", inplace=True)
 df['Status'] = df['Status'].apply(lambda x: str(x).title() if str(x).strip() != "" else "")
